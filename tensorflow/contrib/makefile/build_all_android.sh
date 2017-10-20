@@ -72,6 +72,13 @@ else
   make -f tensorflow/contrib/makefile/Makefile clean_except_protobuf_libs
 fi
 
+# Compile nsync for the host and the target Android device architecture.
+# Don't use  export var=`something` syntax; it swallows the exit status.
+HOST_NSYNC_LIB=`tensorflow/contrib/makefile/compile_nsync.sh`
+TARGET_NSYNC_LIB=`CC_PREFIX="${CC_PREFIX}" NDK_ROOT="${NDK_ROOT}" \
+      tensorflow/contrib/makefile/compile_nsync.sh -t android -a armeabi-v7a`
+export HOST_NSYNC_LIB TARGET_NSYNC_LIB
+
 if [[ ! -z "${HEXAGON_LIB_PATH}" ]]; then
     echo "Copy hexagon libraries from ${HEXAGON_LIB_PATH}"
 
@@ -87,7 +94,7 @@ fi
 if [[ "${USE_HEXAGON}" == "true" ]]; then
     HEXAGON_PARENT_DIR=$(cd "${HEXAGON_DOWNLOAD_PATH}" >/dev/null && pwd)
     HEXAGON_LIBS="${HEXAGON_PARENT_DIR}/libs"
-    HEXAGON_INCLUDE=$(cd "tensorflow/core/platform/hexagon" >/dev/null && pwd)
+    HEXAGON_INCLUDE=$(cd "tensorflow/core/kernels/hexagon" >/dev/null && pwd)
 fi
 
 if [[ "${ENABLE_EXPERIMENTAL_HEXNN_OPS}" == "true" ]]; then
@@ -97,6 +104,7 @@ fi
 if [[ -z "${BUILD_TARGET}" ]]; then
     make -j"${JOB_COUNT}" -f tensorflow/contrib/makefile/Makefile \
          TARGET=ANDROID NDK_ROOT="${NDK_ROOT}" CC_PREFIX="${CC_PREFIX}" \
+         HOST_NSYNC_LIB="$HOST_NSYNC_LIB" TARGET_NSYNC_LIB="$TARGET_NSYNC_LIB" \
 HEXAGON_LIBS="${HEXAGON_LIBS}" HEXAGON_INCLUDE="${HEXAGON_INCLUDE}" \
 SUB_MAKEFILES="${SUB_MAKEFILES}" ${EXTRA_MAKE_ARGS[@]} ANDROID_ARCH="${ARCHITECTURE}"
 else
@@ -104,6 +112,7 @@ else
     # passed to make in a single build_all_android.sh invocation.
     make -j"${JOB_COUNT}" -f tensorflow/contrib/makefile/Makefile \
          TARGET=ANDROID NDK_ROOT="${NDK_ROOT}" CC_PREFIX="${CC_PREFIX}" \
+         HOST_NSYNC_LIB="$HOST_NSYNC_LIB" TARGET_NSYNC_LIB="$TARGET_NSYNC_LIB" \
 HEXAGON_LIBS="${HEXAGON_LIBS}" HEXAGON_INCLUDE="${HEXAGON_INCLUDE}" \
 SUB_MAKEFILES="${SUB_MAKEFILES}" ${EXTRA_MAKE_ARGS[@]} ANDROID_ARCH="${ARCHITECTURE}" \
 ${BUILD_TARGET}

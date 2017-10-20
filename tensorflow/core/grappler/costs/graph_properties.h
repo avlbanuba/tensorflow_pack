@@ -39,17 +39,26 @@ class GraphProperties {
   Status InferDynamically(Cluster* cluster);
   Status InferFromCostGraph(const CostGraphDef& cost_graph);
 
+  // Stores `item_.graph` with the inferred output shapes to `output_graph_def`.
+  Status AnnotateOutputShapes(GraphDef* output_graph_def);
+
+  bool HasInputProperties(const string& name) const;
   bool HasOutputProperties(const string& name) const;
-  std::vector<OpInfo::TensorProperties> GetInputProperties(
+  const std::vector<OpInfo::TensorProperties>& GetInputProperties(
       const string& node_name) const;
-  std::vector<OpInfo::TensorProperties> GetOutputProperties(
+  const std::vector<OpInfo::TensorProperties>& GetOutputProperties(
       const string& node_name) const;
+
+  static void FillTensorPropertiesFromContext(
+      const shape_inference::ShapeHandle&, const DataType&,
+      shape_inference::InferenceContext*, OpInfo::TensorProperties*);
 
  private:
   // Inputs
   GrapplerItem item_;
   std::map<string, std::vector<OpInfo::TensorProperties>> input_properties_;
   std::map<string, std::vector<OpInfo::TensorProperties>> output_properties_;
+  const std::vector<OpInfo::TensorProperties> missing_properties_;
 
   // Merges shapes <shapes_and_types>, determined from an EnqueueV2 node, into
   // <*queue_shapes_and_types>.

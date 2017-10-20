@@ -17,6 +17,7 @@ limitations under the License.
 #include "tensorflow/core/framework/fake_input.h"
 #include "tensorflow/core/framework/node_def_builder.h"
 #include "tensorflow/core/framework/op_def_builder.h"
+#include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/framework/tensor_testutil.h"
 #include "tensorflow/core/framework/types.pb.h"
 #include "tensorflow/core/lib/core/status_test_util.h"
@@ -36,19 +37,11 @@ OpDef MakeOpDefWithLists() {
   return op_reg_data.op_def;
 }
 
-TensorShapeProto S(std::initializer_list<int64> dims) {
-  PartialTensorShape shape(dims);
-  TensorShapeProto ret;
-  shape.AsProto(&ret);
-  return ret;
+PartialTensorShape S(std::initializer_list<int64> dims) {
+  return PartialTensorShape(dims);
 }
 
-TensorShapeProto Unknown() {
-  PartialTensorShape shape;
-  TensorShapeProto ret;
-  shape.AsProto(&ret);
-  return ret;
-}
+PartialTensorShape Unknown() { return PartialTensorShape(); }
 
 }  // namespace
 
@@ -938,6 +931,33 @@ TEST_F(ShapeInferenceTest, UnknownShape) {
   EXPECT_FALSE(SameHandle(u0, u1));
 }
 
+TEST_F(ShapeInferenceTest, KnownShapeToProto) {
+  NodeDef def;
+  std::vector<ShapeHandle> empty;
+  InferenceContext c(kVersion, &def, MakeOpDef(0, 2), empty, {}, {}, {});
+
+  auto s = c.MakeShape({1, 2, 3});
+  TensorShapeProto proto;
+  c.ShapeHandleToProto(s, &proto);
+
+  EXPECT_FALSE(proto.unknown_rank());
+  EXPECT_EQ(3, proto.dim_size());
+  EXPECT_EQ(1, proto.dim(0).size());
+}
+
+TEST_F(ShapeInferenceTest, UnknownShapeToProto) {
+  NodeDef def;
+  std::vector<ShapeHandle> empty;
+  InferenceContext c(kVersion, &def, MakeOpDef(0, 2), empty, {}, {}, {});
+
+  auto u0 = c.UnknownShape();
+  TensorShapeProto proto;
+  c.ShapeHandleToProto(u0, &proto);
+
+  EXPECT_TRUE(proto.unknown_rank());
+  EXPECT_EQ(0, proto.dim_size());
+}
+
 TEST_F(ShapeInferenceTest, Scalar) {
   NodeDef def;
   std::vector<ShapeHandle> empty;
@@ -1537,7 +1557,7 @@ void ShapeInferenceTest::TestMergeHandles(bool input_not_output) {
                      {});
   auto make_shape = [&c](std::initializer_list<int64> dim_sizes) {
     ShapeHandle s;
-    TF_CHECK_OK(c.MakeShapeFromShapeProto(S(dim_sizes), &s));
+    TF_CHECK_OK(c.MakeShapeFromPartialTensorShape(S(dim_sizes), &s));
     return s;
   };
   auto get_shapes_and_types_from_context = [&](int idx) {
@@ -1648,7 +1668,7 @@ void ShapeInferenceTest::TestRelaxHandles(bool input_not_output) {
                      {});
   auto make_shape = [&c](std::initializer_list<int64> dim_sizes) {
     ShapeHandle s;
-    TF_CHECK_OK(c.MakeShapeFromShapeProto(S(dim_sizes), &s));
+    TF_CHECK_OK(c.MakeShapeFromPartialTensorShape(S(dim_sizes), &s));
     return s;
   };
   auto get_shapes_and_types_from_context = [&](int idx) {

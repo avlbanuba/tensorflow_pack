@@ -28,7 +28,7 @@ REGISTER_OP("AddN")
     .Input("inputs: N * T")
     .Output("sum: T")
     .Attr("N: int >= 1")
-    .Attr("T: numbertype")
+    .Attr("T: {numbertype, variant}")
     .SetIsCommutative()
     .SetIsAggregate()
     .SetShapeFn([](InferenceContext* c) {
@@ -45,6 +45,38 @@ REGISTER_OP("AddN")
 Add all input tensors element wise.
 
 inputs: Must all be the same size and shape.
+)doc");
+
+// --------------------------------------------------------------------------
+
+// Note that the following operator is just a placeholder and has no
+// associated kernel. The code in accumulate_n_optimizer.cc replaces
+// this placeholder with a graph of operators that do have kernels.
+// The Python code that generates instances of this op is currently in
+// contrib/framework/python/ops/accumulate_n_v2.py
+REGISTER_OP("AccumulateNV2")
+    .Input("inputs: N * T")
+    .Output("sum: T")
+    .Attr("N: int >= 1")
+    .Attr("T: numbertype")
+    .Attr("shape: shape")
+    .SetIsCommutative()
+    .SetIsAggregate()
+    .SetShapeFn(shape_inference::ExplicitShape)
+    .Doc(R"doc(
+Returns the element-wise sum of a list of tensors.
+
+`tf.accumulate_n_v2` performs the same operation as `tf.add_n`, but does not
+wait for all of its inputs to be ready before beginning to sum. This can
+save memory if inputs are ready at different times, since minimum temporary
+storage is proportional to the output size rather than the inputs size.
+
+Unlike the original `accumulate_n`, `accumulate_n_v2` is differentiable.
+
+Returns a `Tensor` of same shape and type as the elements of `inputs`.
+
+inputs: A list of `Tensor` objects, each with same shape and type.
+shape: Shape of elements of `inputs`.
 )doc");
 
 // --------------------------------------------------------------------------
@@ -197,8 +229,8 @@ value is computed as \\( \sqrt{a^2 + b^2}\\).
       .SetShapeFn(shape_inference::UnchangedShape)
 
 #define UNARY_GRADIENT_COMPLEX()                               \
-  Input("x: T")                                                \
-      .Input("y: T")                                           \
+  Input("y: T")                                                \
+      .Input("dy: T")                                          \
       .Output("z: T")                                          \
       .Attr("T: {half, float, double, complex64, complex128}") \
       .SetShapeFn(shape_inference::UnchangedShape)
@@ -303,6 +335,18 @@ Computes hyperbolic cosine of x element-wise.
 
 REGISTER_OP("Tanh").UNARY_COMPLEX().Doc(R"doc(
 Computes hyperbolic tangent of `x` element-wise.
+)doc");
+
+REGISTER_OP("Asinh").UNARY_COMPLEX().Doc(R"doc(
+Computes inverse hyperbolic sine of x element-wise.
+)doc");
+
+REGISTER_OP("Acosh").UNARY_COMPLEX().Doc(R"doc(
+Computes inverse hyperbolic cosine of x element-wise.
+)doc");
+
+REGISTER_OP("Atanh").UNARY_COMPLEX().Doc(R"doc(
+Computes inverse hyperbolic tangent of x element-wise.
 )doc");
 
 REGISTER_OP("TanhGrad").UNARY_GRADIENT_COMPLEX().Doc(R"doc(
@@ -486,8 +530,39 @@ Returns x + y element-wise.
 [here](http://docs.scipy.org/doc/numpy/user/basics.broadcasting.html)
 )doc");
 
+REGISTER_OP("_MklAdd")
+    .Input("x: T")
+    .Input("y: T")
+    .Input("mkl_x: uint8")
+    .Input("mkl_y: uint8")
+    .Output("z: T")
+    .Output("mkl_z: uint8")
+    .Attr(
+        "T: {half, float, double, uint8, int8, int16, int32, int64, complex64, "
+        "complex128, string}")
+    .SetShapeFn(shape_inference::BroadcastBinaryOpShapeFn)
+    .Doc(R"doc(
+Returns x + y element-wise.
+
+*NOTE*: `Add` supports broadcasting. `AddN` does not. More about broadcasting
+[here](http://docs.scipy.org/doc/numpy/user/basics.broadcasting.html)
+)doc");
+
 REGISTER_OP("Sub")
+    .BINARY_MORE()
+    .SetShapeFn(shape_inference::BroadcastBinaryOpShapeFn)
+    .Doc(R"doc(
+Returns x - y element-wise.
+
+*NOTE*: `Sub` supports broadcasting. More about broadcasting
+[here](http://docs.scipy.org/doc/numpy/user/basics.broadcasting.html)
+)doc");
+
+REGISTER_OP("_MklSub")
     .BINARY_FEWER()
+    .Input("mkl_x: uint8")
+    .Input("mkl_y: uint8")
+    .Output("mkl_z: uint8")
     .SetShapeFn(shape_inference::BroadcastBinaryOpShapeFn)
     .Doc(R"doc(
 Returns x - y element-wise.
@@ -498,6 +573,20 @@ Returns x - y element-wise.
 
 REGISTER_OP("Mul")
     .BINARY_MORE()
+    .SetIsCommutative()
+    .SetShapeFn(shape_inference::BroadcastBinaryOpShapeFn)
+    .Doc(R"doc(
+Returns x * y element-wise.
+
+*NOTE*: `Mul` supports broadcasting. More about broadcasting
+[here](http://docs.scipy.org/doc/numpy/user/basics.broadcasting.html)
+)doc");
+
+REGISTER_OP("_MklMul")
+    .BINARY_MORE()
+    .Input("mkl_x: uint8")
+    .Input("mkl_y: uint8")
+    .Output("mkl_z: uint8")
     .SetIsCommutative()
     .SetShapeFn(shape_inference::BroadcastBinaryOpShapeFn)
     .Doc(R"doc(
@@ -565,6 +654,20 @@ Returns (x - y)(x - y) element-wise.
 [here](http://docs.scipy.org/doc/numpy/user/basics.broadcasting.html)
 )doc");
 
+REGISTER_OP("_MklSquaredDifference")
+    .BINARY_FEWER()
+    .Input("mkl_x: uint8")
+    .Input("mkl_y: uint8")
+    .Output("mkl_z: uint8")
+    .SetIsCommutative()
+    .SetShapeFn(shape_inference::BroadcastBinaryOpShapeFn)
+    .Doc(R"doc(
+Returns (x - y)(x - y) element-wise.
+
+*NOTE*: `SquaredDifference` supports broadcasting. More about broadcasting
+[here](http://docs.scipy.org/doc/numpy/user/basics.broadcasting.html)
+)doc");
+
 #undef BINARY_FEWER
 #undef BINARY_MORE
 
@@ -572,6 +675,23 @@ REGISTER_OP("Maximum")
     .Input("x: T")
     .Input("y: T")
     .Output("z: T")
+    .Attr("T: {half, float, double, int32, int64}")
+    .SetIsCommutative()
+    .SetShapeFn(shape_inference::BroadcastBinaryOpShapeFn)
+    .Doc(R"doc(
+Returns the max of x and y (i.e. x > y ? x : y) element-wise.
+
+*NOTE*: `Maximum` supports broadcasting. More about broadcasting
+[here](http://docs.scipy.org/doc/numpy/user/basics.broadcasting.html)
+)doc");
+
+REGISTER_OP("_MklMaximum")
+    .Input("x: T")
+    .Input("y: T")
+    .Input("mkl_x: uint8")
+    .Input("mkl_y: uint8")
+    .Output("z: T")
+    .Output("mkl_z: uint8")
     .Attr("T: {half, float, double, int32, int64}")
     .SetIsCommutative()
     .SetShapeFn(shape_inference::BroadcastBinaryOpShapeFn)
@@ -1134,7 +1254,8 @@ Reduces `input` along the dimensions given in `reduction_indices`. Unless
 retained with length 1.
 
 input: The tensor to reduce.
-reduction_indices: The dimensions to reduce.
+reduction_indices: The dimensions to reduce. Must be in the range
+  `[-rank(input), rank(input))`.
 keep_dims: If true, retain reduced dimensions with length 1.
 output: The reduced tensor.
 )doc");
@@ -1156,7 +1277,8 @@ Reduces `input` along the dimensions given in `reduction_indices`. Unless
 retained with length 1.
 
 input: The tensor to reduce.
-reduction_indices: The dimensions to reduce.
+reduction_indices: The dimensions to reduce. Must be in the range
+  `[-rank(input), rank(input))`.
 keep_dims: If true, retain reduced dimensions with length 1.
 output: The reduced tensor.
 )doc");
@@ -1178,7 +1300,8 @@ Reduces `input` along the dimensions given in `reduction_indices`. Unless
 retained with length 1.
 
 input: The tensor to reduce.
-reduction_indices: The dimensions to reduce.
+reduction_indices: The dimensions to reduce. Must be in the range
+  `[-rank(input), rank(input))`.
 keep_dims: If true, retain reduced dimensions with length 1.
 output: The reduced tensor.
 )doc");
@@ -1200,7 +1323,8 @@ Reduces `input` along the dimensions given in `reduction_indices`. Unless
 retained with length 1.
 
 input: The tensor to reduce.
-reduction_indices: The dimensions to reduce.
+reduction_indices: The dimensions to reduce. Must be in the range
+  `[-rank(input), rank(input))`.
 keep_dims: If true, retain reduced dimensions with length 1.
 output: The reduced tensor.
 )doc");
@@ -1222,7 +1346,8 @@ Reduces `input` along the dimensions given in `reduction_indices`. Unless
 retained with length 1.
 
 input: The tensor to reduce.
-reduction_indices: The dimensions to reduce.
+reduction_indices: The dimensions to reduce. Must be in the range
+  `[-rank(input), rank(input))`.
 keep_dims: If true, retain reduced dimensions with length 1.
 output: The reduced tensor.
 )doc");
@@ -1289,33 +1414,37 @@ Status ArgOpShape(shape_inference::InferenceContext* c) {
 REGISTER_OP("ArgMax")
     .Input("input: T")
     .Input("dimension: Tidx")
-    .Output("output: int64")
+    .Output("output: output_type")
     .Attr("T: numbertype")
     .Attr("Tidx: {int32, int64} = DT_INT32")
+    .Attr("output_type: {int32, int64} = DT_INT64")
     .SetShapeFn(ArgOpShape)
     .Doc(R"doc(
 Returns the index with the largest value across dimensions of a tensor.
 
 Note that in case of ties the identity of the return value is not guaranteed.
 
-dimension: int32, 0 <= dimension < rank(input).  Describes which dimension
-  of the input Tensor to reduce across. For vectors, use dimension = 0.
+dimension: int32 or int64, must be in the range `[-rank(input), rank(input))`.
+  Describes which dimension of the input Tensor to reduce across. For vectors,
+  use dimension = 0.
 )doc");
 
 REGISTER_OP("ArgMin")
     .Input("input: T")
     .Input("dimension: Tidx")
-    .Output("output: int64")
+    .Output("output: output_type")
     .Attr("T: numbertype")
     .Attr("Tidx: {int32, int64} = DT_INT32")
+    .Attr("output_type: {int32, int64} = DT_INT64")
     .SetShapeFn(ArgOpShape)
     .Doc(R"doc(
 Returns the index with the smallest value across dimensions of a tensor.
 
 Note that in case of ties the identity of the return value is not guaranteed.
 
-dimension: int32, 0 <= dimension < rank(input).  Describes which dimension
-  of the input Tensor to reduce across. For vectors, use dimension = 0.
+dimension: int32 or int64, must be in the range `[-rank(input), rank(input))`.
+  Describes which dimension of the input Tensor to reduce across. For vectors,
+  use dimension = 0.
 )doc");
 
 namespace {
@@ -1642,7 +1771,7 @@ If the maximum is empty for a given segment ID `i`, it outputs the smallest poss
  `output[i] = numeric_limits<T>::min()`.
 
 <div style="width:70%; margin:auto; margin-bottom:10px; margin-top:20px;">
-<img style="width:100%" src="https://www.tensorflow.org/images/UnsortedSegmentSum.png" alt>
+<img style="width:100%" src="https://www.tensorflow.org/images/UnsortedSegmentMax.png" alt>
 </div>
 
 segment_ids: A 1-D tensor whose rank is equal to the rank of `data`'s
@@ -1809,7 +1938,8 @@ Reduces `input` along the dimensions given in `reduction_indices`. Unless
 retained with length 1.
 
 input: The tensor to reduce.
-reduction_indices: The dimensions to reduce.
+reduction_indices: The dimensions to reduce. Must be in the range
+  `[-rank(input), rank(input))`.
 keep_dims: If true, retain reduced dimensions with length 1.
 output: The reduced tensor.
 )doc");
@@ -1830,7 +1960,8 @@ Reduces `input` along the dimensions given in `reduction_indices`. Unless
 retained with length 1.
 
 input: The tensor to reduce.
-reduction_indices: The dimensions to reduce.
+reduction_indices: The dimensions to reduce. Must be in the range
+  `[-rank(input), rank(input))`.
 keep_dims: If true, retain reduced dimensions with length 1.
 output: The reduced tensor.
 )doc");
@@ -2042,10 +2173,38 @@ tf.imag(input) ==> [4.75, 5.75]
 ```
 )doc");
 
+REGISTER_OP("Angle")
+    .Input("input: T")
+    .Output("output: Tout")
+    .Attr("T: {complex64, complex128} = DT_COMPLEX64")
+    .Attr("Tout: {float, double} = DT_FLOAT")
+    .SetShapeFn(shape_inference::UnchangedShape)
+    .Doc(R"doc(
+Returns the argument of a complex number.
+
+Given a tensor `input` of complex numbers, this operation returns a tensor of
+type `float` that is the argument of each element in `input`. All elements in
+`input` must be complex numbers of the form \\(a + bj\\), where *a*
+is the real part and *b* is the imaginary part.
+
+The argument returned by this operation is of the form \\(atan2(b, a)\\).
+
+For example:
+
+```
+# tensor 'input' is [-2.25 + 4.75j, 3.25 + 5.75j]
+tf.angle(input) ==> [2.0132, 1.056]
+```
+
+@compatibility(numpy)
+Equivalent to np.angle.
+@end_compatibility
+)doc");
+
 REGISTER_OP("Conj")
     .Input("input: T")
     .Output("output: T")
-    .Attr("T: {complex64, complex128} = DT_COMPLEX64")
+    .Attr("T: {complex64, complex128, variant} = DT_COMPLEX64")
     .SetShapeFn(shape_inference::UnchangedShape)
     .Doc(R"doc(
 Returns the complex conjugate of a complex number.
@@ -2162,6 +2321,14 @@ The `reverse` and `exclusive` kwargs can also be combined:
 ```python
 tf.cumsum([a, b, c], exclusive=True, reverse=True)  # => [b + c, c, 0]
 ```
+
+x: A `Tensor`. Must be one of the following types: `float32`, `float64`,
+  `int64`, `int32`, `uint8`, `uint16`, `int16`, `int8`, `complex64`,
+  `complex128`, `qint8`, `quint8`, `qint32`, `half`.
+axis: A `Tensor` of type `int32` (default: 0). Must be in the range
+  `[-rank(x), rank(x))`.
+exclusive: If `True`, perform exclusive cumsum.
+reverse: A `bool` (default: False).
 )doc");
 
 REGISTER_OP("Cumprod")
@@ -2204,6 +2371,14 @@ The `reverse` and `exclusive` kwargs can also be combined:
 ```python
 tf.cumprod([a, b, c], exclusive=True, reverse=True)  # => [b * c, c, 1]
 ```
+
+x: A `Tensor`. Must be one of the following types: `float32`, `float64`,
+  `int64`, `int32`, `uint8`, `uint16`, `int16`, `int8`, `complex64`,
+  `complex128`, `qint8`, `quint8`, `qint32`, `half`.
+axis: A `Tensor` of type `int32` (default: 0). Must be in the range
+  `[-rank(x), rank(x))`.
+exclusive: If `True`, perform exclusive cumprod.
+reverse: A `bool` (default: False).
 )doc");
 
 REGISTER_OP("QuantizedMatMul")
@@ -2271,7 +2446,12 @@ REGISTER_OP("QuantizedMul")
     .Attr("T2: quantizedtype")
     .Attr("Toutput: quantizedtype = DT_QINT32")
     .SetIsCommutative()
-    .SetShapeFn(shape_inference::BroadcastBinaryOpShapeFn)
+    .SetShapeFn([](InferenceContext* c) {
+      TF_RETURN_IF_ERROR(shape_inference::BroadcastBinaryOpShapeFn(c));
+      c->set_output(1, c->Scalar());
+      c->set_output(2, c->Scalar());
+      return Status::OK();
+    })
     .Doc(R"doc(
 Returns x * y element-wise, working on quantized buffers.
 
@@ -2300,7 +2480,12 @@ REGISTER_OP("QuantizedAdd")
     .Attr("T2: quantizedtype")
     .Attr("Toutput: quantizedtype = DT_QINT32")
     .SetIsCommutative()
-    .SetShapeFn(shape_inference::BroadcastBinaryOpShapeFn)
+    .SetShapeFn([](InferenceContext* c) {
+      TF_RETURN_IF_ERROR(shape_inference::BroadcastBinaryOpShapeFn(c));
+      c->set_output(1, c->Scalar());
+      c->set_output(2, c->Scalar());
+      return Status::OK();
+    })
     .Doc(R"doc(
 Returns x + y element-wise, working on quantized buffers.
 
@@ -2409,6 +2594,64 @@ out_type: The type of the output. Should be a lower bit depth than Tinput.
 
 )doc");
 
+REGISTER_OP("CompareAndBitpack")
+    .Input("input: T")
+    .Input("threshold: T")
+    .Output("output: uint8")
+    .Attr("T: {bool, float16, float32, float64, int8, int16, int32, int64}")
+    .SetShapeFn([](InferenceContext* c) {
+      ShapeHandle input;
+      TF_RETURN_IF_ERROR(c->WithRankAtLeast(c->input(0), 1, &input));
+      ShapeHandle unused;
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 0, &unused));
+      ShapeHandle output = input;
+      if (c->RankKnown(input)) {
+        int rank = c->Rank(input);
+        auto inner_dim = c->Dim(input, rank - 1);
+        DimensionHandle inferred_dim;
+        TF_RETURN_IF_ERROR(c->Divide(inner_dim, 8,
+                                     /* evenly_divisible */ true,
+                                     &inferred_dim));
+        TF_RETURN_IF_ERROR(
+            c->ReplaceDim(output, rank - 1, inferred_dim, &output));
+      }
+      c->set_output(0, output);
+
+      return Status::OK();
+    })
+    .Doc(R"doc(
+Compare values of `input` to `threshold` and pack resulting bits into a `uint8`.
+
+Each comparison returns a boolean `true` (if `input_value > threshold`)
+or and `false` otherwise.
+
+This operation is useful for Locality-Sensitive-Hashing (LSH) and other
+algorithms that use hashing approximations of cosine and `L2` distances;
+codes can be generated from an input via:
+
+```python
+codebook_size = 50
+codebook_bits = codebook_size * 32
+codebook = tf.get_variable('codebook', [x.shape[-1].value, codebook_bits],
+                           dtype=x.dtype,
+                           initializer=tf.orthogonal_initializer())
+codes = compare_and_threshold(tf.matmul(x, codebook), threshold=0.)
+codes = tf.bitcast(codes, tf.int32)  # go from uint8 to int32
+# now codes has shape x.shape[:-1] + [codebook_size]
+```
+
+**NOTE**: Currently, the innermost dimension of the tensor must be divisible
+by 8.
+
+Given an `input` shaped `[s0, s1, ..., s_n]`, the output is
+a `uint8` tensor shaped `[s0, s1, ..., s_n / 8]`.
+
+input: Values to compare against `threshold` and bitpack.
+threshold: Threshold to compare against.
+T: The type of the input and threshold.
+output: The bitpacked comparisons.
+)doc");
+
 REGISTER_OP("RequantizationRange")
     .Input("input: Tinput")
     .Input("input_min: float")
@@ -2468,5 +2711,32 @@ output: Same shape with 'input', each value of input replaced with bucket index.
 Equivalent to np.digitize.
 @end_compatibility
 )doc");
+
+#ifdef INTEL_MKL
+REGISTER_OP("_MklAddN")
+    .Input("inputs: N * T")
+    .Input("mkl_input: N * uint8")
+    .Output("sum: T")
+    .Output("mkl_sum: uint8")
+    .Attr("N: int >= 1")
+    .Attr("T: numbertype")
+    .SetIsCommutative()
+    .SetIsAggregate()
+    .SetShapeFn([](InferenceContext* c) {
+      ShapeHandle cur = c->input(c->num_inputs() - 1);
+      for (int i = c->num_inputs() - 2; i >= 0; --i) {
+        TF_RETURN_WITH_CONTEXT_IF_ERROR(c->Merge(c->input(i), cur, &cur),
+                                        "From merging shape ", i,
+                                        " with other shapes.");
+      }
+      c->set_output(0, cur);
+      return Status::OK();
+    })
+    .Doc(R"doc(
+Add two input tensors element wise using mkl kernel sum.
+inputs: Must all be the same size and shape.
+)doc");
+
+#endif  // INTEL_MKL
 
 }  // namespace tensorflow

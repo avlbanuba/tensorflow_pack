@@ -624,7 +624,7 @@ See also
 [`the original batch normalization paper`](https://arxiv.org/abs/1502.03167)
 for a detailed description of the algorithm.
 
-<b> Warning: Not implemented yet </b>
+<b> Warning: Not implemented on GPU backend yet. </b>
 
 Normalizes an array across batch and spatial dimensions.
 
@@ -681,7 +681,7 @@ spatial dimensions using the formulars above.
 See also
 [`ComputationBuilder::BatchNormInference`](https://www.tensorflow.org/code/tensorflow/compiler/xla/client/computation_builder.h).
 
-<b> Warning: Not implemented yet </b>
+<b> Warning: Not implemented yet. </b>
 
 Normalizes an array across batch and spatial dimensions.
 
@@ -718,11 +718,11 @@ The output is a n dimensional, normalized array with the same shape as input
 See also
 [`ComputationBuilder::BatchNormGrad`](https://www.tensorflow.org/code/tensorflow/compiler/xla/client/computation_builder.h).
 
-<b> Warning: Not implemented yet </b>
+<b> Warning: Not implemented yet. </b>
 
 Calculates gradients of batch norm.
 
-<b> `BatchNormGrad(x, scale, mean, variance, epsilon, grad_y, feature_index)` </b>
+<b> `BatchNormGrad(operand, scale, mean, variance, grad_output, epsilon, feature_index)` </b>
 
 | Arguments       | Type                    | Semantics                        |
 | --------------  | ----------------------- | -------------------------------- |
@@ -844,6 +844,7 @@ See also
 :                   :                          : T_1, ..., T_{N + M -1} -> S`  :
 :                   :                          : with N parameters of type T   :
 :                   :                          : and M of arbitrary type       :
+| `dimensions`       | `int64` array           | array of map dimensions    |
 | `static_operands` | sequence of M            | M arrays of arbitrary type    |
 :                   : `ComputationDataHandle`s :                               :
 
@@ -1018,6 +1019,41 @@ We can also reduce multiple dimensions. Add-reducing dimensions 0 and 1 produces
 the 1D array `| 20 28 36 |`.
 
 Reducing the 3D array over all its dimensions produces the scalar `84`.
+
+## ReducePrecision
+
+See also
+[`ComputationBuilder::ReducePrecision`](https://www.tensorflow.org/code/tensorflow/compiler/xla/client/computation_builder.h).
+
+Models the effect of converting floating-point values to a lower-precision
+format (such as IEEE-FP16) and back to the original format.  The number of
+exponent and mantissa bits in the lower-precision format can be specified
+arbitrarily, although all bit sizes may not be supported on all hardware
+implementations.
+
+<b> `ReducePrecision(operand, mantissa_bits, exponent_bits)` </b>
+
+| Arguments           | Type                    | Semantics                    |
+| ------------------- | ----------------------- | ---------------------------- |
+| `operand`           | `ComputationDataHandle` | array of floating-point type |
+:                     :                         : `T`.                         :
+| `exponent_bits`     | `int32`                 | number of exponent bits in   |
+:                     :                         : lower-precision format       :
+| `mantissa_bits`     | `int32`                 | number of mantissa bits in   |
+:                     :                         : lower-precision format       :
+
+The result is an array of type `T`.  The input values are rounded to the nearest
+value representable with the given number of mantissa bits (using "ties to even"
+semantics), and any values that exceed the range specified by the number of
+exponent bits are clamped to positive or negative infinity.  `NaN` values are
+retained, although they may be converted to canonical `NaN` values.
+
+The lower-precision format must have at least one exponent bit (in order to
+distinguish a zero value from an infinity, since both have a zero mantissa), and
+must have a non-negative number of mantissa bits.  The number of exponent or
+mantissa bits may exceed the corresponding value for type `T`; the corresponding
+portion of the conversion is then simply a no-op.
+
 
 ## ReduceWindow
 

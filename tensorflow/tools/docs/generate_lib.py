@@ -50,7 +50,7 @@ def _is_free_function(py_object, full_name, index):
   return True
 
 
-def write_docs(output_dir, parser_config, yaml_toc):
+def write_docs(output_dir, parser_config, yaml_toc, root_title='TensorFlow'):
   """Write previously extracted docs to disk.
 
   Write a docs page for each symbol included in the indices of parser_config to
@@ -65,15 +65,15 @@ def write_docs(output_dir, parser_config, yaml_toc):
     parser_config: A `parser.ParserConfig` object, containing all the necessary
       indices.
     yaml_toc: Set to `True` to generate a "_toc.yaml" file.
+    root_title: The title name for the root level index.md.
 
   Raises:
     ValueError: if `output_dir` is not an absolute path
   """
   # Make output_dir.
   if not os.path.isabs(output_dir):
-    raise ValueError(
-        "'output_dir' must be an absolute path.\n"
-        "    output_dir='%s'" % output_dir)
+    raise ValueError("'output_dir' must be an absolute path.\n"
+                     "    output_dir='%s'" % output_dir)
 
   try:
     if not os.path.exists(output_dir):
@@ -91,6 +91,7 @@ def write_docs(output_dir, parser_config, yaml_toc):
 
   # Parse and write Markdown pages, resolving cross-links (@{symbol}).
   for full_name, py_object in six.iteritems(parser_config.index):
+    parser_config.reference_resolver.current_doc_full_name = full_name
 
     if full_name in parser_config.duplicate_of:
       continue
@@ -168,7 +169,7 @@ def write_docs(output_dir, parser_config, yaml_toc):
   # Write a global index containing all full names with links.
   with open(os.path.join(output_dir, 'index.md'), 'w') as f:
     f.write(
-        parser.generate_global_index('TensorFlow', parser_config.index,
+        parser.generate_global_index(root_title, parser_config.index,
                                      parser_config.reference_resolver))
 
 
@@ -182,7 +183,7 @@ def add_dict_to_dict(add_from, add_to):
 
 # Exclude some libaries in contrib from the documentation altogether.
 def _get_default_private_map():
-  return {}
+  return {'tf.test': ['mock']}
 
 
 # Exclude members of some libaries.
@@ -192,8 +193,9 @@ def _get_default_do_not_descend_map():
       'tf': ['cli', 'lib', 'wrappers'],
       'tf.contrib': [
           'compiler',
-          'factorization',
           'grid_rnn',
+          # Block contrib.keras to de-clutter the docs
+          'keras',
           'labeled_tensor',
           'ndlstm',
           'quantization',
@@ -391,6 +393,9 @@ def _other_docs(src_dir, output_dir, reference_resolver):
         print('Skipping excluded file %s...' % base_name)
         continue
       full_in_path = os.path.join(dirpath, base_name)
+
+      reference_resolver.current_doc_full_name = full_in_path
+
       suffix = os.path.relpath(path=full_in_path, start=src_dir)
       full_out_path = os.path.join(output_dir, suffix)
       if not base_name.endswith('.md'):
@@ -417,7 +422,7 @@ class DocGenerator(object):
 
   def __init__(self):
     if sys.version_info >= (3, 0):
-      print('Warning: Doc generation is not supported from python3.')
+      sys.exit('Doc generation is not supported from python3.')
     self.argument_parser = argparse.ArgumentParser()
     self._py_modules = None
     self._private_map = _get_default_private_map()
@@ -445,7 +450,7 @@ class DocGenerator(object):
         '--base_dir',
         type=str,
         default=default_base_dir,
-        help='Base directory to to strip from file names referenced in docs.')
+        help='Base directory to strip from file names referenced in docs.')
 
   def parse_known_args(self):
     flags, _ = self.argument_parser.parse_known_args()
@@ -489,8 +494,8 @@ class DocGenerator(object):
         base_dir=base_dir)
 
   def run_extraction(self):
-    return extract(
-        self._py_modules, self._private_map, self._do_not_descend_map)
+    return extract(self._py_modules, self._private_map,
+                   self._do_not_descend_map)
 
   def build(self, flags):
     """Actually build the docs."""
@@ -498,6 +503,7 @@ class DocGenerator(object):
     visitor = self.run_extraction()
     reference_resolver = self.make_reference_resolver(visitor, doc_index)
 
+    root_title = getattr(flags, 'root_title', 'TensorFlow')
     guide_index = _build_guide_index(
         os.path.join(flags.src_dir, 'api_guides/python'))
 
@@ -505,10 +511,13 @@ class DocGenerator(object):
                                             guide_index, flags.base_dir)
     output_dir = os.path.join(flags.output_dir, 'api_docs/python')
 
-    write_docs(output_dir, parser_config, yaml_toc=self.yaml_toc)
+    write_docs(
+        output_dir,
+        parser_config,
+        yaml_toc=self.yaml_toc,
+        root_title=root_title)
     _other_docs(flags.src_dir, flags.output_dir, reference_resolver)
 
-    if parser.all_errors:
-      print('Errors during processing:\n  ' + '\n  '.join(parser.all_errors))
-      return 1
-    return 0
+    parser_config.reference_resolver.log_errors()
+
+    return parser_config.reference_resolver.num_errors()
