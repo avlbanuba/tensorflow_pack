@@ -177,7 +177,7 @@ endif
 $(info PROTOC = "$(PROTOC)")
 $(info CC_PREFIX = "$(CC_PREFIX)")
 
-PROTOCFLAGS :=
+PROTOCFLA :=
 AR := ar
 ARFLAGS := -r
 LIBFLAGS :=
@@ -216,7 +216,19 @@ ifeq ($(TARGET),ANDROID)
 # NDK_ROOT=/path/to/your/ndk
 # You need to have an Android version of the protobuf libraries compiled to link
 # in. The compile_android_protobuf.sh script may help.
-# TODO(satok): Support all CPU architectures (Currently only armv7 is supported)
+# TODO(satok): Support all CPU architectures (Currently only armv7 and arm64-v8a is supported)
+
+    TOOLCHAIN_PREF=arm-linux-androideabi
+    ARCH_FLAG=-march=armv7-a
+    CXX_ARCH_FLAGS=$(ARCH_FLAG) -mfloat-abi=softfp -mfpu=neon
+    SYSROOT=$(NDK_ROOT)/platforms/android-21/arch-arm
+
+    ifeq ($(ANDROID_ARCH),arm64-v8a)
+        TOOLCHAIN_PREF=aarch64-linux-android
+        ARCH_FLAG=-march=armv8-a
+        CXX_ARCH_FLAGS="$(ARCH_FLAG)"
+        SYSROOT=$(NDK_ROOT)/platforms/android-21/arch-arm64
+    endif
 
 	OS_PATH :=
 	ifeq ($(HOST_OS),LINUX)
@@ -232,13 +244,11 @@ ifeq ($(TARGET),ANDROID)
 	ifndef NDK_ROOT
     $(error "NDK_ROOT is not defined.")
 	endif
-	CXX := $(CC_PREFIX) $(NDK_ROOT)/toolchains/arm-linux-androideabi-4.9/prebuilt/$(OS_PATH)-x86_64/bin/arm-linux-androideabi-g++
+	CXX := $(CC_PREFIX) $(NDK_ROOT)/toolchains/$(TOOLCHAIN_PREF)-4.9/prebuilt/$(OS_PATH)-x86_64/bin/$(TOOLCHAIN_PREF)-g++
 	CXXFLAGS +=\
---sysroot $(NDK_ROOT)/platforms/android-21/arch-arm \
+--sysroot $(SYSROOT) \
 -Wno-narrowing \
--march=armv7-a \
--mfloat-abi=softfp \
--mfpu=neon \
+$(CXX_ARCH_FLAGS) \
 -fPIE
 
 	INCLUDES = \
@@ -260,17 +270,17 @@ ifeq ($(TARGET),ANDROID)
 -lz \
 -lm
 
-	LD := $(NDK_ROOT)/toolchains/arm-linux-androideabi-4.9/prebuilt/$(OS_PATH)-x86_64/arm-linux-androideabi/bin/ld
+	LD := $(NDK_ROOT)/toolchains/$(TOOLCHAIN_PREF)-4.9/prebuilt/$(OS_PATH)-x86_64/$(TOOLCHAIN_PREF)/bin/ld
 
 	LDFLAGS := \
--march=armv7-a \
+$(ARCH_FLAG) \
 -L$(MAKEFILE_DIR)/gen/protobuf/lib \
--L$(NDK_ROOT)/sources/cxx-stl/gnu-libstdc++/4.9/libs/armeabi-v7a \
+-L$(NDK_ROOT)/sources/cxx-stl/gnu-libstdc++/4.9/libs/$(ANDROID_ARCH) \
 -fPIE \
 -pie \
 -v
 
-	AR := $(NDK_ROOT)/toolchains/arm-linux-androideabi-4.9/prebuilt/$(OS_PATH)-x86_64/bin/arm-linux-androideabi-ar
+	AR := $(NDK_ROOT)/toolchains/$(TOOLCHAIN_PREF)-4.9/prebuilt/$(OS_PATH)-x86_64/bin/$(TOOLCHAIN_PREF)-ar
 	ARFLAGS := r
 	LIBFLAGS += -Wl,--allow-multiple-definition -Wl,--whole-archive
 
@@ -616,7 +626,7 @@ $(HOST_GENDIR)%.pb.cc $(HOST_GENDIR)%.pb.h: %.proto
 	@mkdir -p $(dir $@)
 	$(PROTOC) $(PROTOCFLAGS) $< --cpp_out $(HOST_GENDIR)
 
-# Gets rid of all generated files.
+# Gets rid of all gunerated files.
 clean:
 	rm -rf $(MAKEFILE_DIR)/gen
 	rm -rf tensorflow/core/util/version_info.cc

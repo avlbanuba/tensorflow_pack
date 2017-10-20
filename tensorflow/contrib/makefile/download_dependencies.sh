@@ -47,7 +47,18 @@ download_and_extract() {
   local dir="${2:?${usage}}"
   echo "downloading ${url}" >&2
   mkdir -p "${dir}"
-  curl -Ls "${url}" | tar -C "${dir}" --strip-components=1 -xz
+  if [[ "${url}" == *gz ]]; then
+    curl -Ls "${url}" | tar -C "${dir}" --strip-components=1 -xz
+  elif [[ "${url}" == *zip ]]; then
+    tempdir=$(mktemp -d)
+    tempdir2=$(mktemp -d)
+    wget -P ${tempdir} ${url}
+    unzip ${tempdir}/* -d ${tempdir2}
+    # unzip has no strip components, so unzip to a temp dir, and move the files
+    # we want from the tempdir to destination.
+    cp -R ${tempdir2}/*/* ${dir}/
+    rm -rf ${tempdir2} ${tempdir}
+  fi
 
   # Delete any potential BUILD files, which would interfere with Bazel builds.
   find "${dir}" -type f -name '*BUILD' -delete

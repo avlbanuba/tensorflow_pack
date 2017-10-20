@@ -39,3 +39,14 @@ tensorflow/contrib/makefile/compile_linux_protobuf.sh
 make -j"${JOB_COUNT}" -f tensorflow/contrib/makefile/Makefile \
   OPTFLAGS="-O3 -march=native" \
   HOST_CXXFLAGS="--std=c++11 -march=native"
+
+# create distributive
+DISTR=distributive/linux
+mkdir -p "${DISTR}"
+mv -f tensorflow/contrib/makefile/gen/lib "${DISTR}/tensorflow"
+mv -f tensorflow/contrib/makefile/gen/protobuf/lib "${DISTR}/protobuf"
+
+HEADERS=distributive/headers
+mkdir -p "${HEADERS}"
+find tensorflow/core/public/ -name '*.h' -exec  cp '{}' ${DISTR}/../headers/ \;
+

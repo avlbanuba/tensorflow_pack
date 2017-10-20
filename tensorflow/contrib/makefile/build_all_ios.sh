@@ -51,3 +51,12 @@ tensorflow/contrib/makefile/compile_ios_tensorflow.sh "-O3"
 # Creates a static universal library in 
 # tensorflow/contrib/makefile/gen/lib/libtensorflow-core.a
 
+# create distributive
+DISTR=distributive/ios
+mkdir -p "${DISTR}"
+mv -f tensorflow/contrib/makefile/gen/lib "${DISTR}/tensorflow"
+mv -f tensorflow/contrib/makefile/gen/protobuf_ios/lib "${DISTR}/protobuf"
+
+HEADERS=distributive/headers
+mkdir -p "${HEADERS}"
+find tensorflow/core/public/ -name '*.h' -exec  cp '{}' ${DISTR}/../headers/ \;
