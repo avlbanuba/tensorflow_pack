@@ -17,7 +17,6 @@
 # the TensorFlow library itself. Supported on Ubuntu 14.04 and 16.04.
 
 set -e
-
 # Make sure we're in the correct directory, at the root of the source tree.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd ${SCRIPT_DIR}/../../../
@@ -47,12 +46,8 @@ make -j"${JOB_COUNT}" -f tensorflow/contrib/makefile/Makefile \
   HOST_CXXFLAGS="--std=c++11 -march=native"
 
 # create distributive
-DISTR=distributive/linux
-mkdir -p "${DISTR}"
-mv -f tensorflow/contrib/makefile/gen/lib "${DISTR}/tensorflow"
-mv -f tensorflow/contrib/makefile/gen/protobuf/lib "${DISTR}/protobuf"
+export DISTR=distributive/linux
+export PROTOBUF=protobuf
 
-HEADERS=distributive/headers
-mkdir -p "${HEADERS}"
-find tensorflow/core/public/ -name '*.h' -exec  cp '{}' ${DISTR}/../headers/ \;
+tensorflow/contrib/makefile/copy_distro.sh
 

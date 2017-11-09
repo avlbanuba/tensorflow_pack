@@ -76,7 +76,7 @@ fi
 # Don't use  export var=`something` syntax; it swallows the exit status.
 HOST_NSYNC_LIB=`tensorflow/contrib/makefile/compile_nsync.sh`
 TARGET_NSYNC_LIB=`CC_PREFIX="${CC_PREFIX}" NDK_ROOT="${NDK_ROOT}" \
-      tensorflow/contrib/makefile/compile_nsync.sh -t android -a armeabi-v7a`
+      tensorflow/contrib/makefile/compile_nsync.sh -t android -a ${ARCHITECTURE}`
 export HOST_NSYNC_LIB TARGET_NSYNC_LIB
 
 if [[ ! -z "${HEXAGON_LIB_PATH}" ]]; then
@@ -119,12 +119,7 @@ ${BUILD_TARGET}
 fi
 
 # create distributive
-DISTR=distributive/android-"${ARCHITECTURE}"
-mkdir -p "${DISTR}"
-mv -f tensorflow/contrib/makefile/gen/lib "${DISTR}/tensorflow"
-mv -f tensorflow/contrib/makefile/gen/protobuf/lib "${DISTR}/protobuf"
+export DISTR=distributive/android-"${ARCHITECTURE}"
+export PROTOBUF=protobuf
 
-HEADERS=distributive/headers
-mkdir -p "${HEADERS}"
-find tensorflow/core/public/ -name '*.h' -exec  cp '{}' ${DISTR}/../headers/ \;
-
+tensorflow/contrib/makefile/copy_distro.sh

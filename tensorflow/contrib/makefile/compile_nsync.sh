@@ -204,7 +204,7 @@ for arch in $archs; do
                 arm64-v8a)              toolchain="aarch64-linux-android-4.9"
                                         sysroot_arch="arm64"
                                         bin_prefix="aarch64-linux-android"
-                                        march_option=
+                                        march_option="-march=armv8-a"
                                         ;;
                 armeabi)                toolchain="arm-linux-androideabi-4.9"
                                         sysroot_arch="arm"
